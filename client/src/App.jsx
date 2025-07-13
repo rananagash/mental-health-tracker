@@ -51,6 +51,9 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HomeIcon from '@mui/icons-material/Home';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
+import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -244,12 +247,16 @@ function LandscapeLayout({ children, onLogout, navigate }) {
         <Toolbar />
         <Box sx={{ overflow: 'auto', mt: 2 }}>
           <List>
-            <ListItem button onClick={() => navigate('/journal')}>
+            <ListItem button onClick={() => navigate('/dashboard')}>
               <ListItemIcon sx={{ color: 'white' }}><HomeIcon /></ListItemIcon>
               <ListItemText primary="Dashboard" />
             </ListItem>
-            <ListItem button onClick={() => navigate('/mood-trends')}>
+            <ListItem button onClick={() => navigate('/journal')}>
               <ListItemIcon sx={{ color: 'white' }}><BarChartIcon /></ListItemIcon>
+              <ListItemText primary="Journal" />
+            </ListItem>
+            <ListItem button onClick={() => navigate('/mood-trends')}>
+              <ListItemIcon sx={{ color: 'white' }}><EmojiEmotionsIcon /></ListItemIcon>
               <ListItemText primary="Mood Trends" />
             </ListItem>
             <ListItem button onClick={onLogout}>
@@ -266,7 +273,7 @@ function LandscapeLayout({ children, onLogout, navigate }) {
   );
 }
 
-function JournalDashboard() {
+function JournalPage() {
   const navigate = useNavigate();
   const [text, setText] = useState('');
   const [mood, setMood] = useState(3);
@@ -356,17 +363,35 @@ function JournalDashboard() {
     setEditingId(null);
   };
 
+  const JOURNAL_PROMPTS = [
+    'Describe a moment today that made you smile.',
+    'What is something you are grateful for right now?',
+    'Write about a challenge you overcame recently.',
+    'How are you feeling emotionally today? Why?',
+    'What is one thing you want to improve about your mental health?',
+    'Describe a place where you feel most at peace.',
+    'What is a small win you had this week?',
+    'Who is someone that inspires you and why?',
+    'What is a self-care activity you enjoy?',
+    'Write about a time you helped someone.',
+    'What is something you are looking forward to?',
+    'How do you handle stress? What works for you?',
+    'What is a positive affirmation you want to remember?',
+    'Describe a recent dream or goal you have.',
+    'What is something you love about yourself?'
+  ];
+
   const handleGeneratePrompt = async () => {
     setPromptLoading(true);
     setPrompt('');
     try {
-      // OpenAI does not have a truly free public endpoint, so for demo, use a placeholder or a free prompt API if available
-      // Example using Bored API for demo purposes
+      // Try to fetch from Bored API for variety
       const res = await fetch('https://www.boredapi.com/api/activity?type=education');
       const data = await res.json();
-      setPrompt(data.activity || 'Write about a recent challenge you overcame.');
+      const apiPrompt = data.activity && !data.activity.toLowerCase().includes('learn') ? data.activity : null;
+      setPrompt(apiPrompt || JOURNAL_PROMPTS[Math.floor(Math.random() * JOURNAL_PROMPTS.length)]);
     } catch (err) {
-      setPrompt('Write about a recent challenge you overcame.');
+      setPrompt(JOURNAL_PROMPTS[Math.floor(Math.random() * JOURNAL_PROMPTS.length)]);
     } finally {
       setPromptLoading(false);
     }
@@ -381,7 +406,7 @@ function JournalDashboard() {
         <Grid container spacing={4}>
           <Grid item xs={7}>
             <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <Button variant="contained" color="info" startIcon={<LightbulbIcon />} onClick={handleGeneratePrompt} disabled={promptLoading}>
+              <Button variant="contained" color="info" startIcon={<LightbulbIcon />} onClick={handleGeneratePrompt} disabled={promptLoading} sx={{ textTransform: 'none' }}>
                 {promptLoading ? 'Generating...' : 'Generate Prompt'}
               </Button>
             </Box>
@@ -483,13 +508,68 @@ function JournalDashboard() {
 }
 
 function MoodTrendsPreview() {
-  // ... reuse MoodTrendsPage logic but with a smaller chart and no AppBar ...
-  // For brevity, you can show a small chart or summary here, or leave as a placeholder
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEntries = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get('/api/journal');
+        setEntries(res.data);
+      } catch {
+        setEntries([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEntries();
+  }, []);
+
+  if (loading) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}><CircularProgress size={20} /></Box>;
+  }
+  if (!entries.length) {
+    return <Typography variant="body2" color="text.secondary">No entries yet.</Typography>;
+  }
+
+  // Show last 7 entries
+  const previewEntries = entries.slice(-7);
+  const labels = previewEntries.map(e => new Date(e.date || e.createdAt).toLocaleDateString());
+  const moodData = previewEntries.map(e => e.mood);
+
+  // Weekly average
+  const weeklyAvg = (moodData.reduce((sum, m) => sum + m, 0) / moodData.length).toFixed(2);
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: 'Mood',
+        data: moodData,
+        fill: false,
+        borderColor: 'rgb(255, 182, 193)', // pastel pink
+        tension: 0.2,
+        pointRadius: 2,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { y: { min: 1, max: 5, ticks: { stepSize: 1 } } },
+  };
+
   return (
-    <Paper elevation={2} sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>Mood Trends Preview</Typography>
-      <Typography variant="body2" color="text.secondary">See your mood chart and stats on the full Mood Trends page.</Typography>
-    </Paper>
+    <Box>
+      <Box sx={{ width: '100%', maxWidth: 300, mx: 'auto' }}>
+        <Line data={data} options={options} height={120} />
+      </Box>
+      <Typography variant="body2" sx={{ mt: 1, textAlign: 'center' }}>
+        <b>Weekly Avg:</b> {weeklyAvg}
+      </Typography>
+    </Box>
   );
 }
 
@@ -669,40 +749,182 @@ function MoodTrendsPage() {
   };
 
   return (
-    <Box sx={{ bgcolor: '#f5f6fa', minHeight: '100vh' }}>
-      <AppBar position="static" color="primary">
-        <Toolbar>
-          <IconButton color="inherit" onClick={() => navigate('/journal')}><ArrowBackIcon /></IconButton>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>Mood Trends</Typography>
-        </Toolbar>
-      </AppBar>
-      <Container maxWidth="md" sx={{ mt: 4 }}>
-        {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box> : error ? <Alert severity="error">{error}</Alert> : (
-          <Paper elevation={3} sx={{ p: 3 }}>
-            <Line data={data} options={options} />
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="body1"><b>Weekly Average:</b> {weeklyAvg ?? 'N/A'}</Typography>
-              <Typography variant="body1"><b>Monthly Average:</b> {monthlyAvg ?? 'N/A'}</Typography>
-              <Typography variant="h6" color="primary" sx={{ mt: 2 }}>{summary}</Typography>
+    <LandscapeLayout
+      onLogout={() => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/';
+      }}
+      navigate={navigate}
+    >
+      <Box
+        sx={{
+          bgcolor: '#f5f6fa',
+          minHeight: 'calc(100vh - 64px)',
+          width: '100%',
+          py: 0,
+          px: 2,
+          boxSizing: 'border-box',
+        }}
+      >
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : error ? (
+          <Alert severity="error">{error}</Alert>
+        ) : (
+          <Paper
+            elevation={3}
+            sx={{
+              p: 3,
+              maxWidth: 700,
+              width: '100%',
+              mx: 10,
+              my: 15,
+              ml: -10, // extra left margin for visual centering
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Box sx={{ width: '100%', maxWidth: 600, mx: 'auto' }}>
+              <Line data={data} options={options} />
+            </Box>
+            <Box sx={{ mt: 3, width: '100%', textAlign: 'center' }}>
+              <Typography variant="body1">
+                <b>Weekly Average:</b> {weeklyAvg ?? 'N/A'}
+              </Typography>
+              <Typography variant="body1">
+                <b>Monthly Average:</b> {monthlyAvg ?? 'N/A'}
+              </Typography>
+              <Typography variant="h6" color="primary" sx={{ mt: 2 }}>
+                {summary}
+              </Typography>
             </Box>
           </Paper>
         )}
-      </Container>
+      </Box>
+    </LandscapeLayout>
+  );
+}
+
+function DashboardPage() {
+  const navigate = useNavigate();
+  // Example inspirational quotes
+  const quotes = [
+    "Every day may not be good, but there is something good in every day.",
+    "You don't have to control your thoughts. You just have to stop letting them control you.",
+    "Start where you are. Use what you have. Do what you can.",
+    "Self-care is how you take your power back.",
+    "Progress, not perfection."
+  ];
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  // MoodTrendsPreview can be improved to show a small chart or summary
+  return (
+    <LandscapeLayout onLogout={() => { localStorage.removeItem('token'); localStorage.removeItem('user'); window.location.href = '/'; }} navigate={navigate}>
+      <Box sx={{ bgcolor: 'background.default', minHeight: '100vh', p: 4 }}>
+        <Typography variant="h3" sx={{ fontWeight: 700, mb: 2, color: 'primary.main' }}>Dashboard</Typography>
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={6}>
+            <Paper elevation={3} sx={{ p: 3, mb: 2 }}>
+              <Typography variant="h6" gutterBottom>Mood Trends Preview</Typography>
+              <MoodTrendsPreview />
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Paper elevation={3} sx={{ p: 3, mb: 2 }}>
+              <Typography variant="h6" gutterBottom>Inspirational Quote</Typography>
+              <Typography variant="body1" sx={{ fontStyle: 'italic', color: 'secondary.main', fontSize: 20 }}>
+                {quotes[Math.floor(Math.random() * quotes.length)]}
+              </Typography>
+            </Paper>
+            <Paper elevation={3} sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>Profile</Typography>
+              <Typography variant="body2"><b>Name:</b> {user.name || 'Anonymous'}</Typography>
+              <Typography variant="body2"><b>Email:</b> {user.email || 'Not set'}</Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Box>
+    </LandscapeLayout>
+  );
+}
+
+function LandingPage() {
+  const navigate = useNavigate();
+  const token = localStorage.getItem('token');
+  return (
+    <Box sx={{
+      minHeight: '100vh',
+      bgcolor: 'background.default',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      px: 2
+    }}>
+      <Paper elevation={6} sx={{
+        p: { xs: 3, sm: 6 },
+        maxWidth: 700,
+        width: '100%',
+        textAlign: 'center',
+        bgcolor: 'background.paper',
+        borderRadius: 4,
+        boxShadow: 6,
+        mb: 4
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <SelfImprovementIcon color="primary" sx={{ fontSize: 60, mr: 1 }} />
+          <EmojiEmotionsIcon color="secondary" sx={{ fontSize: 60, ml: 1 }} />
+        </Box>
+        <Typography variant="h2" sx={{ fontWeight: 700, color: 'primary.main', mb: 1, fontSize: { xs: 36, sm: 48 } }}>
+          Mindful Journal
+        </Typography>
+        <Typography variant="h5" sx={{ color: 'text.secondary', mb: 3 }}>
+          Track your mood. Reflect. Grow. <FavoriteIcon color="error" sx={{ verticalAlign: 'middle', fontSize: 28, mx: 0.5 }} />
+        </Typography>
+        <Typography variant="body1" sx={{ mb: 4, color: 'text.secondary', maxWidth: 500, mx: 'auto' }}>
+          Mindful Journal helps you understand your emotions, build healthy habits, and see your progress over time. Secure, private, and beautifully simple.
+        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+          {token ? (
+            <Button variant="contained" color="primary" size="large" onClick={() => navigate('/dashboard')}>
+              Go to Dashboard
+            </Button>
+          ) : (
+            <>
+              <Button variant="contained" color="primary" size="large" onClick={() => navigate('/login')}>
+                Login
+              </Button>
+              <Button variant="outlined" color="secondary" size="large" onClick={() => navigate('/signup')}>
+                Sign Up
+              </Button>
+            </>
+          )}
+        </Box>
+      </Paper>
+      <Typography variant="caption" color="text.secondary">
+        &copy; {new Date().getFullYear()} Mindful Journal. All rights reserved.
+      </Typography>
     </Box>
   );
 }
 
 function App() {
+  const token = localStorage.getItem('token');
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/journal" element={<AuthenticatedRoute><JournalDashboard /></AuthenticatedRoute>} />
+        <Route path="/journal" element={<AuthenticatedRoute><JournalPage /></AuthenticatedRoute>} />
         <Route path="/journal/new" element={<AuthenticatedRoute><NewEntryPage /></AuthenticatedRoute>} />
         <Route path="/journal/:id" element={<AuthenticatedRoute><EntryDetailsPage /></AuthenticatedRoute>} />
         <Route path="/mood-trends" element={<AuthenticatedRoute><MoodTrendsPage /></AuthenticatedRoute>} />
-        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="/dashboard" element={<AuthenticatedRoute><DashboardPage /></AuthenticatedRoute>} />
+        <Route path="/" element={<LandingPage />} />
       </Routes>
     </Router>
   );
